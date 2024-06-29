@@ -120,8 +120,8 @@ unsigned char *convertToGrayscale(unsigned char* image, unsigned width, unsigned
 int main() {
     int width = 0, height = 0;
     double threshold = 25.0;
-    const char *inputFilename = "skull.png";
-    const char *outputFilename = "skull-result.png";
+    const char *inputFilename = "head.png";
+    const char *outputFilename = "head-res.png";
     unsigned char *originalImage = loadPNGFile(inputFilename, &width, &height);
     unsigned char *grayscaleImage = convertToGrayscale(originalImage, width, height);
     applySobelFilter(grayscaleImage, width, height);
