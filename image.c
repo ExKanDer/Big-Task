@@ -137,8 +137,8 @@ int main()
 	unsigned w = 0, h = 0;
 	int k = 0;
 	double epsilon = 25.0;
-	unsigned char *filename = "skull.png";
-	unsigned char *output = "skull-result.png";
+	unsigned char *filename = "head.png";
+	unsigned char *output = "head_result.png";
 	unsigned char *image = load_png_file(filename, &w, &h);
 	Filter(image, w, h);
     colouring(image,w,h,epsilon);
