@@ -5,129 +5,144 @@
 
 typedef struct point{
     int x, y;
-} Point;
+}pt;
 
-char* loadPNGFile(const char *filename, int *width, int *height) {
+char* load_png_file(const char *filename, int *width, int *height) {
 	unsigned char *image = NULL;
 	int error = lodepng_decode32_file(&image, width, height, filename);
 	if (error) {
 		printf("error %u: %s\n", error, lodepng_error_text(error));
 		return NULL;
 	}
-	return (char*)image;
+	return (image);
 }
 
-void writePNGFile(const char *filename, const unsigned char *image, unsigned width, unsigned height) {
+void write_png_file(const char *filename, const unsigned char *image, unsigned width, unsigned height) {
     unsigned char* png;
-    size_t pngSize;
-    int error = lodepng_encode32(&png, &pngSize, image, width, height);
+    size_t size;
+    int error = lodepng_encode32(&png, &size, image, width, height);
     if (!error) {
-        lodepng_save_file(png, pngSize, filename);
+        lodepng_save_file(png, size, filename);
     }
     free(png);
 }
 
-void applyRandomColour(unsigned char* image, int width, int height, int threshold) {
-    for(int row = 1; row < height - 1; row++) {
-        for(int col = 1; col < width - 1; col++) {
-            int colourRed = rand() % (255 - threshold * 2) + threshold * 2;
-            int colourGreen = rand() % (255 - threshold * 2) + threshold * 2;
-            int colourBlue = rand() % (255 - threshold * 2) + threshold * 2;
-            if(image[4 * (row * width + col)] < threshold || image[4 * (row * width + col)] > 255 - (threshold * 2)) {
-                int deltaX[] = {-1, 0, 1, 0};
-                int deltaY[] = {0, 1, 0, -1};
-                Point* stack = malloc(width * height * 4 * sizeof(Point));
-                long stackTop = 0;
-                stack[stackTop++] = (Point){col, row};
-                while(stackTop > 0) {
-                    Point currentPixel = stack[--stackTop];
-                    if(currentPixel.x < 0 || currentPixel.x >= width || currentPixel.y < 0 || currentPixel.y >= height) continue;
-                    int index = (currentPixel.y * width + currentPixel.x) * 4;
-                    if(image[index] > threshold) continue;
-                    image[index] = colourRed;
-                    image[index + 1] = colourGreen;
-                    image[index + 2] = colourBlue;
-                    for(int direction = 0; direction < 4; direction++) {
-                        int newX = currentPixel.x + deltaX[direction];
-                        int newY = currentPixel.y + deltaY[direction];
-                        if(newX > 0 && newX < width && newY > 0 && newY < height) {
-                            stack[stackTop++] = (Point){newX, newY};
+void colouring(unsigned char* image, int width, int height, int eps)
+{
+
+    pt* stack = malloc(width * height * 4 * sizeof(pt));
+    long stack_size = 0;
+
+    if (stack == NULL) {
+        printf("Not enough memory for 'colouring(image,width=%d,height=%d,eps) function!\n", width, height);
+        return;
+    }
+
+    int color_comps[3] = { 0 };
+    int matrix[2][4] = { {-1,0,1,0},{0,1,0,-1} };
+
+    for (int j = 1; j < height - 1; j++) {
+        for (int i = 1; i < width - 1; i++) {
+            for (int k = 0; k < 3; ++k) {
+                color_comps[k] = rand() % (250 - eps * 2) + eps * 2;
+            }
+            if (image[4 * (j * width + i)] < eps || image[4 * (j * width + i)] > 255 - (eps * 2)) {
+
+                stack[stack_size++] = (pt){ i, j };
+
+                while (stack_size > 0) {
+
+                    pt pixel = stack[--stack_size];
+
+                    if (pixel.x < 0 || pixel.x >= width || pixel.y < 0 || pixel.y >= height) continue;
+                    int ind = (pixel.y * width + pixel.x) * 4;
+                    if (image[ind] > eps) continue;
+
+                    for (int k = 0; k < 3; ++k) {
+                        image[ind + k] = color_comps[k];
+                    }
+
+                    for (int i = 0; i < 4; i++) {
+
+                        pt new_pixel = (pt){ pixel.x + matrix[0][i],  pixel.y + matrix[1][i] };
+
+                        if (new_pixel.x > 0 && new_pixel.x < width && new_pixel.y > 0 && new_pixel.y < height) {
+                            stack[stack_size++] = new_pixel;
                         }
                     }
                 }
-                free(stack);
             }
         }
     }
+
+    free(stack);
 }
 
-void applySobelFilter(unsigned char *image, int width, int height) {
-    int kernelX[3][3] = {{-1, 0, 1}, {-2, 0, 2}, {-1, 0, 1}};
-    int kernelY[3][3] = {{1, 2, 1}, {0, 0, 0}, {-1, -2, -1}};
-    unsigned char *tempImage = malloc(width * height * 4 * sizeof(unsigned char));
-    for(int y = 1; y < height - 1; y++) {
-        for(int x = 1; x < width - 1; x++) {
-            int gradientX = 0;
-            int gradientY = 0;
-            for(int i = -1; i <= 1; i++) {
-                for(int j = -1; j <= 1; j++) {
-                    int index = ((y + j) * width + (i + x)) * 4;
-                    int rgbAverage = (image[index] + image[index + 1] + image[index + 2]) / 3;
-                    gradientX += kernelX[j + 1][i + 1] * rgbAverage;
-                    gradientY += kernelY[j + 1][i + 1] * rgbAverage;
+
+
+
+void Filter(unsigned char* image, int width, int height) {
+
+
+    int kernel_matrix[2][3][3] = { { {-1, 0, 1}, {-2, 0, 2}, {-1, 0, 1} }, { {1, 2, 1}, {0, 0, 0}, {-1, -2, -1} } };
+
+
+    unsigned char* temp_image = malloc(width * height * 4 * sizeof(unsigned char));
+    if (temp_image == NULL) {
+        printf("Not enough memory for Filter(image,width=%d,height=%d)\n", width, height);
+        return;
+    }
+
+    for (int y = 1; y < height - 1; y++) {
+        for (int x = 1; x < width - 1; x++) {
+
+            int vec[2] = { 0, 0 };
+
+            for (int i = -1; i <= 1; i++) {
+                for (int j = -1; j <= 1; j++) {
+
+                    int ind = ((y + j) * width + (i + x)) * 4;
+                    int rgb = (int)round((image[ind] + image[ind + 1] + image[ind + 2]) / 3.0);
+
+                    for (int k = 0; k < 2; ++k) {
+                        vec[k] += kernel_matrix[k][j + 1][i + 1] * rgb;
+                    }
                 }
             }
-            int gradientMagnitude = sqrt(gradientX * gradientX + gradientY * gradientY);
-            if(gradientMagnitude > 255) {
-                gradientMagnitude = 255;
+
+            int grad = (int)round(sqrt(vec[0]*vec[0] + vec[1]*vec[1]));
+
+            if (grad > 255) {
+                grad = 255;
             }
-            int resultIndex = (y * width + x) * 4;
-            tempImage[resultIndex] = (unsigned char)gradientMagnitude;
-            tempImage[resultIndex + 1] = (unsigned char)gradientMagnitude;
-            tempImage[resultIndex + 2] = (unsigned char)gradientMagnitude;
-            tempImage[resultIndex + 3] = image[resultIndex + 3];
+
+            int byte_offset = (y * width + x) * 4;
+
+            for (int k = 0; k < 3; ++k) {
+                temp_image[byte_offset+k] = (unsigned char)grad;
+            }
+            temp_image[byte_offset + 3] = image[byte_offset + 3];
         }
     }
-    for(int i = 0; i < width * height * 4; i++) {
-        image[i] = tempImage[i];
+    for (int k = 0; k < width * height * 4; k++) {
+        image[k] = temp_image[k];
     }
-    free(tempImage);
+    free(temp_image);
+    return;
 }
 
-unsigned char *convertToGrayscale(unsigned char* image, unsigned width, unsigned height) {
-    unsigned char maxRed = 0, maxGreen = 0, maxBlue = 0;
-    unsigned char red, green, blue, alpha;
-    for(int i = 0; i < 4 * height * width; i += 4) {
-        red = image[i];
-        green = image[i + 1];
-        blue = image[i + 2];
-        alpha = image[i + 3];
-        maxRed = fmax(red, maxRed);
-        maxGreen = fmax(green, maxGreen);
-        maxBlue = fmax(blue, maxBlue);
-    }
-    for(int i = 0; i < 4 * width * height; i += 4) {
-        red = image[i];
-        green = image[i + 1];
-        blue = image[i + 2];
-        alpha = image[i + 3];
-        unsigned char grayscaleValue = 255.0 * ((float)red / maxRed + (float)green / maxGreen + (float)blue / maxBlue) / 3;
-        image[i] = image[i + 1] = image[i + 2] = grayscaleValue;
-    }
-    return image;
-}
 
-int main() {
-    int width = 0, height = 0;
-    double threshold = 25.0;
-    const char *inputFilename = "head.png";
-    const char *outputFilename = "head-res.png";
-    unsigned char *originalImage = loadPNGFile(inputFilename, &width, &height);
-    unsigned char *grayscaleImage = convertToGrayscale(originalImage, width, height);
-    applySobelFilter(grayscaleImage, width, height);
-    applyRandomColour(grayscaleImage, width, height, threshold);
-    writePNGFile(outputFilename, grayscaleImage, width, height);
-    free(originalImage);
-    free(grayscaleImage);
-    return 0;
+int main()
+{
+	unsigned w = 0, h = 0;
+	int k = 0;
+	double epsilon = 25.0;
+	unsigned char *filename = "skull.png";
+	unsigned char *output = "skull-result.png";
+	unsigned char *image = load_png_file(filename, &w, &h);
+	Filter(image, w, h);
+    colouring(image,w,h,epsilon);
+	write_png_file(output, image, w, h);
+	free(image);
+	return 0;
 }
